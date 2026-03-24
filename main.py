@@ -343,6 +343,9 @@ class GameSimulator:
         self.commentary_history = []
         self.score = [0, 0]  # Счёт матча
         self.sport_config = self.SPORT_EVENTS.get(game_type, self.SPORT_EVENTS['football'])
+        self.event_commentaries = {}  # Предгенерированные комментарии для событий {time: commentary}
+        self.periodic_commentaries = []  # Предгенерированные периодические комментарии
+        self.intro_commentary = ""  # Вступительный комментарий
         
     async def generate_live_commentary(self, context: str) -> str:
         """Генерирует живой комментарий через AI"""
@@ -587,9 +590,31 @@ Return ONLY the commentary, nothing else."""
                     commentary = "Игра продолжается!"
         
         return commentary
+    
+    def get_commentary_for_event(self, event_time: int, event_description: str) -> str:
+        """Получает предгенерированный комментарий для события или fallback"""
+        # Пытаемся найти предгенерированный комментарий
+        if event_time in self.event_commentaries:
+            return self.event_commentaries[event_time]
+        
+        # Fallback - используем описание события
+        return event_description
+    
+    def get_periodic_commentary(self) -> str:
+        """Получает случайный периодический комментарий"""
+        if self.periodic_commentaries:
+            return random.choice(self.periodic_commentaries)
+        
+        # Fallback
+        if self.game_type == 'boxing':
+            return "Раунд продолжается!"
+        elif self.game_type == 'esports':
+            return "Игра продолжается!"
+        else:
+            return "Матч продолжается!"
         
     async def generate_event_schedule(self):
-        """LLM генерирует расписание событий для реалистичности"""
+        """LLM генерирует расписание событий И комментарии одним запросом"""
         event_types = ', '.join([f'"{e}"' for e in self.sport_config['events']])
         
         # Специфичные промпты для каждого вида спорта
@@ -597,42 +622,62 @@ Return ONLY the commentary, nothing else."""
             'football': {
                 'description': 'football match',
                 'examples': 'гол (goal), удар (shot), угловой (corner), фол (foul)',
-                'context': 'Match events should be realistic for a 5-minute football game with goals, shots, corners, and fouls.'
+                'context': 'Match events should be realistic for a 5-minute football game with goals, shots, corners, and fouls.',
+                'commentary_style': 'exciting football commentary like "Гол! Невероятный удар!", "Опасный момент у ворот!"'
             },
             'boxing': {
                 'description': 'boxing match',
                 'examples': 'удар (punch), нокдаун (knockdown), клинч (clinch), предупреждение (warning)',
-                'context': 'Boxing round events should include punches, clinches, occasional knockdowns, and referee warnings.'
+                'context': 'Boxing round events should include punches, clinches, occasional knockdowns, and referee warnings.',
+                'commentary_style': 'exciting boxing commentary like "Мощный удар в корпус!", "НОКДАУН! Невероятно!"'
             },
             'esports': {
                 'description': 'CS:GO esports match',
                 'examples': 'убийство (kill), хедшот (headshot), ace (ace - 5 kills), дефьюз (defuse)',
-                'context': 'CS:GO round events should include kills, headshots, occasional aces, and bomb defuses.'
+                'context': 'CS:GO round events should include kills, headshots, occasional aces, and bomb defuses.',
+                'commentary_style': 'exciting esports commentary like "Фраг! Отличный выстрел!", "ACE! Все враги повержены!"'
             }
         }
         
         sport_info = sport_context.get(self.game_type, sport_context['football'])
         
-        prompt = f"""Generate a realistic {sport_info['description']} event schedule.
+        prompt = f"""Generate a complete {sport_info['description']} with events AND commentary in ONE response.
 
 Sport: {self.game_type.upper()}
 {sport_info['context']}
 
-Return ONLY a valid JSON array. Each event must have:
-- time_seconds: integer from 0 to 300
-- type: MUST be one of these Russian words: {event_types}
-- description: SHORT natural Russian description (3-5 words max) appropriate for {self.game_type}
+Return ONLY a valid JSON object with this structure:
+{{
+  "events": [
+    {{
+      "time_seconds": 25,
+      "type": "гол",
+      "description": "Мощный удар!",
+      "commentary": "ГОЛ! Невероятный момент!"
+    }},
+    {{
+      "time_seconds": 50,
+      "type": "удар",
+      "description": "Опасный момент!",
+      "commentary": "Удар по воротам! Вратарь в игре!"
+    }}
+  ],
+  "intro_commentary": "Матч начинается! Следите за событиями!",
+  "periodic_commentaries": ["Игра продолжается!", "Напряжение растёт!", "Обе команды атакуют!"]
+}}
 
 CRITICAL RULES:
-- Return ONLY the JSON array, no other text
+- Return ONLY the JSON object, no other text
 - Use proper Russian language
-- Keep descriptions SHORT and natural
-- 8-10 events total
-- Spread events throughout 0-300 seconds
+- 8-10 events total, spread throughout 0-300 seconds
+- Each event MUST have: time_seconds (int), type (one of: {event_types}), description (3-5 words), commentary (5-8 words)
+- Commentary must be {sport_info['commentary_style']}
+- Add intro_commentary (one sentence for match start)
+- Add 5-7 periodic_commentaries (short general comments for use during game)
 - Use ONLY {self.game_type}-specific terminology
-- Examples of event types: {sport_info['examples']}
+- Examples: {sport_info['examples']}
 
-Return ONLY the JSON array now:"""
+Return ONLY the JSON object now:"""
 
         events_generated = False
         try:
@@ -654,28 +699,43 @@ Return ONLY the JSON array now:"""
                 
                 text = text.strip()
                 
-                # Ищем JSON массив в тексте
-                start = text.find('[')
-                end = text.rfind(']')
+                # Ищем JSON объект в тексте
+                start = text.find('{')
+                end = text.rfind('}')
                 if start != -1 and end != -1:
                     text = text[start:end+1]
                 
                 print(f"[Debug] Parsing JSON: {text[:200]}...")
                 
-                events_data = json.loads(text)
+                data = json.loads(text)
                 
-                # Проверяем что это список событий
-                if isinstance(events_data, list) and len(events_data) > 0:
-                    # Проверяем что события имеют нужные поля
-                    valid_events = []
-                    for event in events_data:
-                        if isinstance(event, dict) and 'time_seconds' in event and 'type' in event:
-                            valid_events.append(event)
+                # Проверяем структуру данных
+                if isinstance(data, dict) and 'events' in data:
+                    events_list = data['events']
                     
-                    if valid_events:
-                        self.events = sorted(valid_events, key=lambda x: x['time_seconds'])
-                        print(f"[AI] Generated {len(self.events)} events")
-                        events_generated = True
+                    if isinstance(events_list, list) and len(events_list) > 0:
+                        # Проверяем что события имеют нужные поля
+                        valid_events = []
+                        for event in events_list:
+                            if isinstance(event, dict) and 'time_seconds' in event and 'type' in event:
+                                valid_events.append(event)
+                                # Сохраняем комментарий для события
+                                if 'commentary' in event:
+                                    self.event_commentaries[event['time_seconds']] = event['commentary']
+                        
+                        if valid_events:
+                            self.events = sorted(valid_events, key=lambda x: x['time_seconds'])
+                            
+                            # Сохраняем вступительный комментарий
+                            if 'intro_commentary' in data:
+                                self.intro_commentary = data['intro_commentary']
+                            
+                            # Сохраняем периодические комментарии
+                            if 'periodic_commentaries' in data and isinstance(data['periodic_commentaries'], list):
+                                self.periodic_commentaries = data['periodic_commentaries']
+                            
+                            print(f"[AI] Generated {len(self.events)} events with commentary")
+                            events_generated = True
         except asyncio.TimeoutError:
             print("[Timeout] AI event generation took too long, using fallback")
         except json.JSONDecodeError as e:
@@ -687,77 +747,80 @@ Return ONLY the JSON array now:"""
         
         # Fallback если AI не сработал
         if not events_generated:
-            print("[Fallback] Using predefined events")
+            print("[Fallback] Using predefined events and commentary")
             # Используем события для выбранного вида спорта
-            event_types = self.sport_config['events']
+            event_types_list = self.sport_config['events']
             descriptions = self.sport_config['descriptions']
             
             self.events = []
             times = [25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
             for i, time in enumerate(times):
-                event_type = event_types[i % len(event_types)]
+                event_type = event_types_list[i % len(event_types_list)]
                 desc = random.choice(descriptions[event_type])
                 self.events.append({
                     "time_seconds": time,
                     "type": event_type,
                     "description": desc
                 })
-            print(f"[Fallback] Created {len(self.events)} events")
+                # Используем описание как комментарий в fallback режиме
+                self.event_commentaries[time] = desc
+            
+            # Предустановленные вступительные комментарии
+            if self.game_type == 'boxing':
+                self.intro_commentary = "Бой начинается! Боксёры готовы!"
+            elif self.game_type == 'esports':
+                self.intro_commentary = "Раунд начинается! Команды готовы!"
+            else:
+                self.intro_commentary = "Матч начинается! Следите за событиями!"
+            
+            # Предустановленные периодические комментарии
+            if self.game_type == 'boxing':
+                self.periodic_commentaries = [
+                    "Напряжённый раунд продолжается!",
+                    "Боксёры обмениваются ударами!",
+                    "Интересный момент на ринге!",
+                    "Борьба продолжается!",
+                    "Оба боксёра в хорошей форме!"
+                ]
+            elif self.game_type == 'esports':
+                self.periodic_commentaries = [
+                    "Напряжённая ситуация на карте!",
+                    "Команды борются за позиции!",
+                    "Интересный момент в раунде!",
+                    "Игра продолжается!",
+                    "Счёт очень близкий!"
+                ]
+            else:  # football
+                self.periodic_commentaries = [
+                    "Игра продолжается, напряжение растёт!",
+                    "Обе команды активно атакуют!",
+                    "Интересный момент в игре!",
+                    "Борьба продолжается!",
+                    "Матч набирает обороты!"
+                ]
+            
+            print(f"[Fallback] Created {len(self.events)} events with commentary")
     
     async def run(self, game_id: str):
         """Запускает симуляцию трансляции"""
-        try:
-            # Генерируем события с таймаутом
-            await asyncio.wait_for(
-                self.generate_event_schedule(),
-                timeout=60.0  # 60 секунд максимум
-            )
-        except asyncio.TimeoutError:
-            print("[Critical Timeout] Event generation exceeded 60s, using fallback")
-            # Принудительно создаём события если их нет
-            if not self.events:
-                event_types = self.sport_config['events']
-                descriptions = self.sport_config['descriptions']
-                self.events = []
-                times = [25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
-                for i, time in enumerate(times):
-                    event_type = event_types[i % len(event_types)]
-                    desc = random.choice(descriptions[event_type])
-                    self.events.append({
-                        "time_seconds": time,
-                        "type": event_type,
-                        "description": desc
-                    })
-                print(f"[Emergency Fallback] Created {len(self.events)} events")
-        except Exception as e:
-            print(f"[Critical Error] Event generation failed: {e}")
-            # Принудительно создаём события
-            if not self.events:
-                event_types = self.sport_config['events']
-                descriptions = self.sport_config['descriptions']
-                self.events = []
-                times = [25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
-                for i, time in enumerate(times):
-                    event_type = event_types[i % len(event_types)]
-                    desc = random.choice(descriptions[event_type])
-                    self.events.append({
-                        "time_seconds": time,
-                        "type": event_type,
-                        "description": desc
-                    })
-                print(f"[Emergency Fallback] Created {len(self.events)} events")
+        # Генерируем все события и комментарии заранее (неблокирующий)
+        generation_task = asyncio.create_task(self.generate_event_schedule())
         
-        # ВСЕГДА уведомляем, что игра готова (даже если AI не сработал)
-        print(f"[Game Start] Broadcasting game_ready with {len(self.events)} events")
+        # СРАЗУ уведомляем, что игра готова (не ждём генерации)
+        print(f"[Game Start] Starting game, generation in background")
         await broadcast_to_game(game_id, {
             "type": "game_ready"
         })
         
-        # Отправляем начальный комментарий
-        intro_commentary = await self.generate_live_commentary("Match is starting")
+        # Отправляем начальный комментарий (используем fallback пока не сгенерировано)
+        intro = self.intro_commentary if self.intro_commentary else (
+            "Бой начинается!" if self.game_type == 'boxing' else (
+                "Раунд начинается!" if self.game_type == 'esports' else "Матч начинается!"
+            )
+        )
         await broadcast_to_game(game_id, {
             "type": "commentary",
-            "text": intro_commentary
+            "text": intro
         })
         
         last_commentary_time = 0
@@ -775,15 +838,35 @@ Return ONLY the JSON array now:"""
             # Проверяем события
             for event in self.events:
                 if abs(event['time_seconds'] - self.current_time) < 0.5:
-                    # Обновляем счёт если гол
-                    if event['type'] == 'гол':
-                        self.score[random.randint(0, 1)] += 1
+                    # Обновляем счёт в зависимости от вида спорта и типа события
+                    if self.game_type == 'football':
+                        if event['type'] == 'гол':
+                            self.score[random.randint(0, 1)] += 1
+                    elif self.game_type == 'boxing':
+                        # В боксе очки начисляются за удары и нокдауны
+                        if event['type'] == 'удар':
+                            self.score[random.randint(0, 1)] += random.randint(1, 3)  # 1-3 очка за удар
+                        elif event['type'] == 'нокдаун':
+                            self.score[random.randint(0, 1)] += 10  # 10 очков за нокдаун
+                    elif self.game_type == 'esports':
+                        # В киберспорте очки за убийства и ace
+                        if event['type'] == 'убийство':
+                            self.score[random.randint(0, 1)] += 1  # 1 очко за убийство
+                        elif event['type'] == 'хедшот':
+                            self.score[random.randint(0, 1)] += 1  # 1 очко за хедшот
+                        elif event['type'] == 'ace':
+                            self.score[random.randint(0, 1)] += 5  # 5 очков за ace
+                        elif event['type'] == 'дефьюз':
+                            # Дефьюз не меняет счёт, но можно добавить бонус
+                            pass
                     
-                    # Генерируем комментарий для события
-                    commentary = await self.generate_live_commentary(
-                        f"{event['type']}: {event['description']}"
+                    # Получаем предгенерированный комментарий (мгновенно, без задержки)
+                    commentary = self.get_commentary_for_event(
+                        event['time_seconds'],
+                        event.get('description', '')
                     )
                     
+                    # Отправляем событие сразу
                     await broadcast_to_game(game_id, {
                         "type": "event",
                         "event": event,
@@ -796,14 +879,40 @@ Return ONLY the JSON array now:"""
                     
                     last_commentary_time = self.current_time
             
-            # Периодический комментарий (каждые 20 секунд)
+            # Периодический комментарий (каждые 20 секунд) - мгновенно из предгенерированных
             if self.current_time - last_commentary_time >= 20 and self.current_time % 20 == 0:
-                commentary = await self.generate_live_commentary("General match situation")
+                commentary = self.get_periodic_commentary()
                 await broadcast_to_game(game_id, {
                     "type": "commentary",
                     "text": commentary
                 })
                 last_commentary_time = self.current_time
+        
+        # Ждём завершения генерации (если она ещё не закончилась)
+        try:
+            await asyncio.wait_for(generation_task, timeout=5.0)
+            print("[Info] Generation completed")
+        except asyncio.TimeoutError:
+            print("[Info] Generation still running after game ended")
+        except Exception as e:
+            print(f"[Info] Generation task error: {e}")
+        
+        # Игра закончилась - отправляем финальное сообщение
+        print(f"[Game End] Game finished. Final score: {self.score[0]}-{self.score[1]}")
+        
+        # Определяем финальный комментарий в зависимости от вида спорта
+        if self.game_type == 'boxing':
+            final_commentary = f"Бой окончен! Финальный счёт: {self.score[0]}-{self.score[1]}"
+        elif self.game_type == 'esports':
+            final_commentary = f"Раунд завершён! Счёт: {self.score[0]}-{self.score[1]}"
+        else:
+            final_commentary = f"Матч окончен! Финальный счёт: {self.score[0]}-{self.score[1]}"
+        
+        await broadcast_to_game(game_id, {
+            "type": "game_over",
+            "final_score": self.score,
+            "commentary": final_commentary
+        })
 
 @app.get("/")
 async def get_index():

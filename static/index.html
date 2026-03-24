@@ -637,6 +637,8 @@
                     addBotPredictionToLog(data.bot_name, data.event_type, data.points);
                 } else if (data.type === 'player_success') {
                     addPlayerSuccessToLog(data.player_name, data.event_type, data.points);
+                } else if (data.type === 'game_over') {
+                    handleGameOver(data.final_score, data.commentary);
                 }
             };
             
@@ -828,6 +830,37 @@
             const statusEl = document.getElementById('connectionStatus');
             statusEl.className = `status ${status}`;
             statusEl.textContent = text;
+        }
+        
+        function handleGameOver(finalScore, commentary) {
+            // Отключаем кнопку предсказания
+            const predictBtn = document.getElementById('predictBtn');
+            if (predictBtn) {
+                predictBtn.disabled = true;
+                predictBtn.textContent = 'Игра окончена';
+            }
+            
+            // Добавляем финальный комментарий в лог
+            const log = document.getElementById('eventLog');
+            const item = document.createElement('div');
+            item.className = 'event-item';
+            item.style.background = '#FF5722';
+            item.style.fontSize = '16px';
+            item.style.fontWeight = 'bold';
+            item.textContent = `🏁 ${commentary}`;
+            log.insertBefore(item, log.firstChild);
+            
+            // Показываем финальный счёт на экране
+            const scoreBoard = document.getElementById('scoreBoard');
+            if (scoreBoard) {
+                scoreBoard.style.background = 'rgba(255, 87, 34, 0.9)';
+                scoreBoard.style.fontSize = '36px';
+            }
+            
+            // Обновляем таблицу лидеров в последний раз
+            updateLeaderboard();
+            
+            console.log('Game Over!', finalScore);
         }
 
         async function updateLeaderboard() {
