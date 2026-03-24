@@ -434,7 +434,7 @@ Return ONLY the commentary, nothing else."""
             # Добавляем таймаут для AI генерации
             result = await asyncio.wait_for(
                 asyncio.to_thread(generate_with_ai, prompt),
-                timeout=5.0  # 5 секунд максимум
+                timeout=60.0  # 60 секунд максимум
             )
             if result:
                 commentary = result.strip()
@@ -639,7 +639,7 @@ Return ONLY the JSON array now:"""
             # Добавляем таймаут для AI генерации
             result = await asyncio.wait_for(
                 asyncio.to_thread(generate_with_ai, prompt),
-                timeout=10.0  # 10 секунд максимум
+                timeout=60.0  # 60 секунд максимум
             )
             
             if result:
@@ -710,10 +710,10 @@ Return ONLY the JSON array now:"""
             # Генерируем события с таймаутом
             await asyncio.wait_for(
                 self.generate_event_schedule(),
-                timeout=15.0  # 15 секунд максимум
+                timeout=60.0  # 60 секунд максимум
             )
         except asyncio.TimeoutError:
-            print("[Critical Timeout] Event generation exceeded 15s, using fallback")
+            print("[Critical Timeout] Event generation exceeded 60s, using fallback")
             # Принудительно создаём события если их нет
             if not self.events:
                 event_types = self.sport_config['events']

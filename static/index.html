@@ -591,14 +591,14 @@
             console.log('Connecting to WebSocket:', wsUrl);
             ws = new WebSocket(wsUrl);
             
-            // Таймаут безопасности: если игра не началась через 20 секунд, скрываем загрузку
+            // Таймаут безопасности: если игра не началась через 90 секунд, скрываем загрузку
             const safetyTimeout = setTimeout(() => {
                 const loadingMsg = document.getElementById('loadingMessage');
                 if (loadingMsg && loadingMsg.style.display !== 'none') {
                     console.warn('Game loading timeout - hiding loading screen');
                     loadingMsg.style.display = 'none';
                 }
-            }, 20000);
+            }, 90000);
             
             ws.onopen = () => {
                 updateStatus('connected', 'Подключено');
