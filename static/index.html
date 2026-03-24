@@ -583,7 +583,13 @@
 
         function connectWebSocket() {
             const gameId = selectedSport + '_game1';  // Разные игры для разных видов спорта
-            ws = new WebSocket(`ws://${window.location.host}/ws/game/${gameId}`);
+            
+            // Определяем протокол WebSocket в зависимости от протокола страницы
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/game/${gameId}`;
+            
+            console.log('Connecting to WebSocket:', wsUrl);
+            ws = new WebSocket(wsUrl);
             
             // Таймаут безопасности: если игра не началась через 20 секунд, скрываем загрузку
             const safetyTimeout = setTimeout(() => {
