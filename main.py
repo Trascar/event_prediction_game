@@ -346,8 +346,71 @@ class GameSimulator:
         
     async def generate_live_commentary(self, context: str) -> str:
         """Генерирует живой комментарий через AI"""
-        prompt = f"""You are a professional Russian sports commentator. Generate ONE SHORT exciting commentary in Russian (maximum 8 words).
+        
+        # Специфичные промпты для каждого вида спорта
+        sport_prompts = {
+            'football': {
+                'system': 'You are a professional Russian football commentator.',
+                'examples': """GOOD examples:
+- "Гол! Невероятный удар!"
+- "Опасный момент у ворот!"
+- "Угловой удар!"
+- "Фол в центре поля!"
+- "Атака развивается!"
+- "Вратарь в игре!"
 
+BAD examples (DO NOT USE):
+- "Играть началось! Итак, начнем!"
+- "Наши парни в штрафной теперь!"
+- "Напряжение на ринге!"
+- "Фраг команды!"
+""",
+                'context_words': 'поле, ворота, мяч, удар, гол, атака, защита'
+            },
+            'boxing': {
+                'system': 'You are a professional Russian boxing commentator.',
+                'examples': """GOOD examples:
+- "Мощный удар в корпус!"
+- "Боксёр атакует!"
+- "Клинч! Рефери разнимает!"
+- "Точная комбинация!"
+- "Нокдаун! Невероятно!"
+- "Предупреждение от рефери!"
+
+BAD examples (DO NOT USE):
+- "Гол! Мяч в воротах!"
+- "Угловой удар!"
+- "Фраг! Убийство!"
+- "Напряжение у ворот!"
+""",
+                'context_words': 'ринг, удар, раунд, боксёр, клинч, нокдаун, рефери'
+            },
+            'esports': {
+                'system': 'You are a professional Russian esports (CS:GO) commentator.',
+                'examples': """GOOD examples:
+- "Фраг! Отличный выстрел!"
+- "Хедшот! Невероятная точность!"
+- "ACE! Все враги повержены!"
+- "Бомба установлена!"
+- "Дефьюз! Успели!"
+- "Клатч ситуация!"
+
+BAD examples (DO NOT USE):
+- "Гол! Мяч в воротах!"
+- "Угловой удар!"
+- "Фол в центре поля!"
+- "Напряжение у ворот!"
+- "Удар по воротам!"
+""",
+                'context_words': 'карта, фраг, бомба, раунд, команда, выстрел, позиция'
+            }
+        }
+        
+        sport_info = sport_prompts.get(self.game_type, sport_prompts['football'])
+        
+        prompt = f"""{sport_info['system']} Generate ONE SHORT exciting commentary in Russian (maximum 8 words).
+
+Sport: {self.game_type.upper()}
 Context: {context}
 Time: {self.current_time}s
 Score: {self.score[0]}-{self.score[1]}
@@ -355,21 +418,14 @@ Score: {self.score[0]}-{self.score[1]}
 CRITICAL RULES:
 - Write ONLY in proper Russian language
 - Maximum 8 words total
-- Use natural Russian sports commentary style
+- Use natural Russian {self.game_type} commentary style
 - Be enthusiastic but professional
 - NO English words
 - NO awkward phrases
 - Use exclamation marks sparingly
+- Use ONLY {self.game_type}-specific terminology: {sport_info['context_words']}
 
-GOOD examples:
-- "Гол! Невероятный удар!"
-- "Опасный момент у ворот!"
-- "Угловой удар!"
-- "Фол в центре поля!"
-
-BAD examples (DO NOT USE):
-- "Играть началось! Итак, начнем!"
-- "Наши парни в штрафной теперь!"
+{sport_info['examples']}
 
 Return ONLY the commentary, nothing else."""
 
@@ -389,51 +445,140 @@ Return ONLY the commentary, nothing else."""
         
         # Если AI не сработал, используем fallback
         if not commentary:
-            # Fallback на простые комментарии
-            if "гол" in context.lower() or "goal" in context.lower():
-                comments = [
-                    "ГОЛ! Невероятный момент!",
-                    "Гол! Фантастический удар!",
-                    "Мяч в воротах! Потрясающе!",
-                    "Гооол! Какой момент!"
-                ]
-                commentary = random.choice(comments)
-            elif "удар" in context.lower() or "shot" in context.lower():
-                comments = [
-                    "Опасный удар по воротам!",
-                    "Сильный удар! Вратарь напряжён!",
-                    "Удар! Чуть мимо ворот!",
-                    "Мощный удар!"
-                ]
-                commentary = random.choice(comments)
-            elif "угловой" in context.lower() or "corner" in context.lower():
-                comments = [
-                    "Угловой удар! Опасный момент!",
-                    "Корнер! Все в штрафной!",
-                    "Угловой! Шанс забить!",
-                    "Розыгрыш углового!"
-                ]
-                commentary = random.choice(comments)
-            elif "фол" in context.lower() or "foul" in context.lower():
-                comments = [
-                    "Фол! Судья остановил игру!",
-                    "Нарушение правил!",
-                    "Фол в опасной зоне!",
-                    "Жёлтая карточка!"
-                ]
-                commentary = random.choice(comments)
-            elif "starting" in context.lower() or "начинается" in context.lower():
-                commentary = "Матч начинается! Следите за событиями!"
-            elif "situation" in context.lower():
-                comments = [
-                    "Игра продолжается, напряжение растёт!",
-                    "Обе команды активно атакуют!",
-                    "Интересный момент в игре!",
-                    "Борьба продолжается!"
-                ]
-                commentary = random.choice(comments)
-            else:
-                commentary = "Игра продолжается!"
+            # Fallback на простые комментарии в зависимости от вида спорта
+            if self.game_type == 'boxing':
+                if "нокдаун" in context.lower() or "knockdown" in context.lower():
+                    comments = [
+                        "НОКДАУН! Невероятный момент!",
+                        "Боксёр на полу! Сильнейший удар!",
+                        "Нокдаун! Рефери считает!",
+                        "Мощнейший удар! Нокдаун!"
+                    ]
+                    commentary = random.choice(comments)
+                elif "удар" in context.lower() or "punch" in context.lower():
+                    comments = [
+                        "Сильный удар в корпус!",
+                        "Точная комбинация!",
+                        "Мощный хук!",
+                        "Боксёр атакует!"
+                    ]
+                    commentary = random.choice(comments)
+                elif "клинч" in context.lower() or "clinch" in context.lower():
+                    comments = [
+                        "Клинч! Рефери разнимает!",
+                        "Борьба в захвате!",
+                        "Клинч на ринге!",
+                        "Рефери останавливает клинч!"
+                    ]
+                    commentary = random.choice(comments)
+                elif "предупреждение" in context.lower() or "warning" in context.lower():
+                    comments = [
+                        "Предупреждение от рефери!",
+                        "Нарушение правил!",
+                        "Замечание боксёру!",
+                        "Рефери делает предупреждение!"
+                    ]
+                    commentary = random.choice(comments)
+                elif "starting" in context.lower() or "начинается" in context.lower():
+                    commentary = "Бой начинается! Боксёры готовы!"
+                else:
+                    comments = [
+                        "Напряжённый раунд продолжается!",
+                        "Боксёры обмениваются ударами!",
+                        "Интересный момент на ринге!",
+                        "Борьба продолжается!"
+                    ]
+                    commentary = random.choice(comments)
+                    
+            elif self.game_type == 'esports':
+                if "ace" in context.lower():
+                    comments = [
+                        "ACE! Все враги повержены!",
+                        "ACE! Невероятная игра!",
+                        "Пятерка! ACE!",
+                        "ACE! Фантастика!"
+                    ]
+                    commentary = random.choice(comments)
+                elif "хедшот" in context.lower() or "headshot" in context.lower():
+                    comments = [
+                        "ХЕДШОТ! В голову!",
+                        "Точный выстрел в голову!",
+                        "Хедшот! Мгновенная элиминация!",
+                        "В голову! Хедшот!"
+                    ]
+                    commentary = random.choice(comments)
+                elif "убийство" in context.lower() or "kill" in context.lower():
+                    comments = [
+                        "Фраг! Отличный выстрел!",
+                        "Убийство! Элиминация!",
+                        "Фраг команды!",
+                        "Противник повержен!"
+                    ]
+                    commentary = random.choice(comments)
+                elif "дефьюз" in context.lower() or "defuse" in context.lower():
+                    comments = [
+                        "Бомба обезврежена! Успели!",
+                        "Дефьюз! Раунд выигран!",
+                        "Обезвредили бомбу!",
+                        "Дефьюз в последний момент!"
+                    ]
+                    commentary = random.choice(comments)
+                elif "starting" in context.lower() or "начинается" in context.lower():
+                    commentary = "Раунд начинается! Команды готовы!"
+                else:
+                    comments = [
+                        "Напряжённая ситуация на карте!",
+                        "Команды борются за позиции!",
+                        "Интересный момент в раунде!",
+                        "Игра продолжается!"
+                    ]
+                    commentary = random.choice(comments)
+                    
+            else:  # football
+                if "гол" in context.lower() or "goal" in context.lower():
+                    comments = [
+                        "ГОЛ! Невероятный момент!",
+                        "Гол! Фантастический удар!",
+                        "Мяч в воротах! Потрясающе!",
+                        "Гооол! Какой момент!"
+                    ]
+                    commentary = random.choice(comments)
+                elif "удар" in context.lower() or "shot" in context.lower():
+                    comments = [
+                        "Опасный удар по воротам!",
+                        "Сильный удар! Вратарь напряжён!",
+                        "Удар! Чуть мимо ворот!",
+                        "Мощный удар!"
+                    ]
+                    commentary = random.choice(comments)
+                elif "угловой" in context.lower() or "corner" in context.lower():
+                    comments = [
+                        "Угловой удар! Опасный момент!",
+                        "Корнер! Все в штрафной!",
+                        "Угловой! Шанс забить!",
+                        "Розыгрыш углового!"
+                    ]
+                    commentary = random.choice(comments)
+                elif "фол" in context.lower() or "foul" in context.lower():
+                    comments = [
+                        "Фол! Судья остановил игру!",
+                        "Нарушение правил!",
+                        "Фол в опасной зоне!",
+                        "Жёлтая карточка!"
+                    ]
+                    commentary = random.choice(comments)
+                elif "starting" in context.lower() or "начинается" in context.lower():
+                    commentary = "Матч начинается! Следите за событиями!"
+                elif "situation" in context.lower():
+                    comments = [
+                        "Игра продолжается, напряжение растёт!",
+                        "Обе команды активно атакуют!",
+                        "Интересный момент в игре!",
+                        "Борьба продолжается!"
+                    ]
+                    commentary = random.choice(comments)
+                else:
+                    commentary = "Игра продолжается!"
         
         return commentary
         
@@ -441,12 +586,36 @@ Return ONLY the commentary, nothing else."""
         """LLM генерирует расписание событий для реалистичности"""
         event_types = ', '.join([f'"{e}"' for e in self.sport_config['events']])
         
-        prompt = f"""Generate a realistic {self.game_type} match event schedule.
+        # Специфичные промпты для каждого вида спорта
+        sport_context = {
+            'football': {
+                'description': 'football match',
+                'examples': 'гол (goal), удар (shot), угловой (corner), фол (foul)',
+                'context': 'Match events should be realistic for a 5-minute football game with goals, shots, corners, and fouls.'
+            },
+            'boxing': {
+                'description': 'boxing match',
+                'examples': 'удар (punch), нокдаун (knockdown), клинч (clinch), предупреждение (warning)',
+                'context': 'Boxing round events should include punches, clinches, occasional knockdowns, and referee warnings.'
+            },
+            'esports': {
+                'description': 'CS:GO esports match',
+                'examples': 'убийство (kill), хедшот (headshot), ace (ace - 5 kills), дефьюз (defuse)',
+                'context': 'CS:GO round events should include kills, headshots, occasional aces, and bomb defuses.'
+            }
+        }
+        
+        sport_info = sport_context.get(self.game_type, sport_context['football'])
+        
+        prompt = f"""Generate a realistic {sport_info['description']} event schedule.
+
+Sport: {self.game_type.upper()}
+{sport_info['context']}
 
 Return ONLY a valid JSON array. Each event must have:
 - time_seconds: integer from 0 to 300
 - type: MUST be one of these Russian words: {event_types}
-- description: SHORT natural Russian description (3-5 words max)
+- description: SHORT natural Russian description (3-5 words max) appropriate for {self.game_type}
 
 CRITICAL RULES:
 - Return ONLY the JSON array, no other text
@@ -454,6 +623,8 @@ CRITICAL RULES:
 - Keep descriptions SHORT and natural
 - 8-10 events total
 - Spread events throughout 0-300 seconds
+- Use ONLY {self.game_type}-specific terminology
+- Examples of event types: {sport_info['examples']}
 
 Return ONLY the JSON array now:"""
 

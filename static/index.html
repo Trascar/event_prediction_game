@@ -413,8 +413,8 @@
                             <div class="commentary-text" id="commentaryText"></div>
                         </div>
                         <div id="loadingMessage" style="text-align: center; z-index: 5; background: rgba(0,0,0,0.8); padding: 20px; border-radius: 10px;">
-                            <div style="font-size: 48px; margin-bottom: 10px;">⚽</div>
-                            <div style="font-size: 18px; color: white;">Подготовка матча...</div>
+                            <div id="loadingIcon" style="font-size: 48px; margin-bottom: 10px;">⚽</div>
+                            <div id="loadingText" style="font-size: 18px; color: white;">Подготовка игры...</div>
                             <div style="font-size: 14px; color: #ccc; margin-top: 10px;">Пожалуйста, подождите</div>
                         </div>
                     </div>
@@ -476,6 +476,7 @@
                     'фол': 'Фол'
                 },
                 icon: '⚽',
+                eventIcon: '⚽',
                 animation: 'ball'
             },
             boxing: {
@@ -488,6 +489,7 @@
                     'предупреждение': 'Предупреждение'
                 },
                 icon: '🥊',
+                eventIcon: '🥊',
                 animation: 'boxing'
             },
             esports: {
@@ -499,7 +501,8 @@
                     'ace': 'ACE',
                     'дефьюз': 'Дефьюз'
                 },
-                icon: '🎮',
+                icon: '🎯',
+                eventIcon: '🎯',
                 animation: 'crosshair'
             }
         };
@@ -517,6 +520,20 @@
             const config = sportConfig[selectedSport];
             document.getElementById('sportTitle').textContent = `${config.title} - Предсказывайте события и зарабатывайте очки!`;
             document.getElementById('streamTitle').textContent = `${config.icon} Прямая трансляция`;
+            
+            // Обновляем иконку загрузки
+            const loadingIcon = document.getElementById('loadingIcon');
+            const loadingText = document.getElementById('loadingText');
+            if (loadingIcon) loadingIcon.textContent = config.icon;
+            if (loadingText) {
+                if (selectedSport === 'boxing') {
+                    loadingText.textContent = 'Подготовка боя...';
+                } else if (selectedSport === 'esports') {
+                    loadingText.textContent = 'Подготовка матча...';
+                } else {
+                    loadingText.textContent = 'Подготовка игры...';
+                }
+            }
             
             // Обновляем иконку анимации
             updateSportAnimation(selectedSport);
@@ -627,7 +644,9 @@
             const log = document.getElementById('eventLog');
             const item = document.createElement('div');
             item.className = 'event-item';
-            item.textContent = `⚽ ${event.type.toUpperCase()}: ${event.description}`;
+            const config = sportConfig[selectedSport];
+            const eventIcon = config.eventIcon || '⚽';
+            item.textContent = `${eventIcon} ${event.type.toUpperCase()}: ${event.description}`;
             log.insertBefore(item, log.firstChild);
         }
 
@@ -784,7 +803,7 @@
                     clearInterval(updateButton);
                 } else {
                     const waitTime = lastPredictionTime - currentTime;
-                    btn.textContent = `Ждите ${waitTime} сек`;
+                    btn.textContent = `Подождите ${waitTime} сек.`;
                 }
             }, 1000);
         }
