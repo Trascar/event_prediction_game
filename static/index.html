@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Prediction Game</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        .game-area {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+        .stream-box, .prediction-box, .leaderboard-box {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .stream-video {
+            width: 100%;
+            height: 400px;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+        .field-animation {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: 
+                linear-gradient(90deg, transparent 49%, rgba(255,255,255,0.1) 50%, transparent 51%),
+                linear-gradient(0deg, transparent 49%, rgba(255,255,255,0.1) 50%, transparent 51%);
+            background-size: 50px 50px;
+            opacity: 0.3;
+        }
+        .ball-animation {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: radial-gradient(circle at 30% 30%, white, #ddd);
+            border-radius: 50%;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3), 0 0 20px rgba(255,255,255,0.5);
+            animation: moveBall 6s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+            left: 0;
+            top: 0;
+        }
+        @keyframes moveBall {
+            0% { transform: translate(50px, 100px) scale(1); }
+            12.5% { transform: translate(150px, 50px) scale(1.1) rotate(180deg); }
+            25% { transform: translate(300px, 80px) scale(0.9) rotate(360deg); }
+            37.5% { transform: translate(450px, 50px) scale(1.1) rotate(540deg); }
+            50% { transform: translate(550px, 120px) scale(1) rotate(720deg); }
+            62.5% { transform: translate(450px, 200px) scale(0.9) rotate(900deg); }
+            75% { transform: translate(300px, 180px) scale(1.1) rotate(1080deg); }
+            87.5% { transform: translate(150px, 150px) scale(1) rotate(1260deg); }
+            100% { transform: translate(50px, 100px) scale(1) rotate(1440deg); }
+        }
+        /* Boxing glove animation */
+        .boxing-glove {
+            position: absolute;
+            font-size: 50px;
+            animation: punchAnimation 3s ease-in-out infinite;
+            left: 0;
+            top: 0;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4));
+        }
+        @keyframes punchAnimation {
+            0%, 100% { transform: translate(100px, 150px) rotate(-20deg); }
+            25% { transform: translate(400px, 120px) rotate(10deg) scale(1.3); }
+            50% { transform: translate(500px, 180px) rotate(-10deg); }
+            75% { transform: translate(300px, 200px) rotate(20deg) scale(1.1); }
+        }
+        /* Esports crosshair animation */
+        .crosshair {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            animation: aimAnimation 4s linear infinite;
+            left: 0;
+            top: 0;
+        }
+        .crosshair::before,
+        .crosshair::after {
+            content: '';
+            position: absolute;
+            background: #ff0000;
+            box-shadow: 0 0 10px #ff0000;
+        }
+        .crosshair::before {
+            width: 2px;
+            height: 40px;
+            left: 19px;
+            top: 0;
+        }
+        .crosshair::after {
+            width: 40px;
+            height: 2px;
+            left: 0;
+            top: 19px;
+        }
+        @keyframes aimAnimation {
+            0% { transform: translate(100px, 100px); opacity: 0.8; }
+            25% { transform: translate(450px, 80px); opacity: 1; }
+            50% { transform: translate(500px, 200px); opacity: 0.8; }
+            75% { transform: translate(200px, 180px); opacity: 1; }
+            100% { transform: translate(100px, 100px); opacity: 0.8; }
+        }
+        /* Target for esports */
+        .target {
+            position: absolute;
+            font-size: 60px;
+            animation: targetMove 5s ease-in-out infinite;
+            left: 0;
+            top: 0;
+            opacity: 0.7;
+        }
+        @keyframes targetMove {
+            0%, 100% { transform: translate(150px, 120px) scale(1); }
+            33% { transform: translate(400px, 180px) scale(1.2); }
+            66% { transform: translate(250px, 80px) scale(0.9); }
+        }
+        .player-animation {
+            position: absolute;
+            font-size: 40px;
+            animation: movePlayer 8s ease-in-out infinite;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+            left: 0;
+            top: 0;
+        }
+        @keyframes movePlayer {
+            0% { transform: translate(80px, 150px); }
+            25% { transform: translate(250px, 100px); }
+            50% { transform: translate(450px, 150px) scaleX(-1); }
+            75% { transform: translate(250px, 200px) scaleX(-1); }
+            100% { transform: translate(80px, 150px); }
+        }
+        .hidden { display: none; }
+        .score-board {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 32px;
+            font-weight: bold;
+            z-index: 10;
+        }
+        .commentary-box {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.85);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #4CAF50;
+            z-index: 10;
+            max-height: 80px;
+            overflow: hidden;
+        }
+        .commentary-text {
+            color: white;
+            font-size: 14px;
+            line-height: 1.4;
+            animation: fadeIn 0.5s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes flash {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 1; }
+        }
+        .leaderboard-item .bot-indicator {
+            display: inline-block;
+            margin-left: 5px;
+            font-size: 12px;
+            opacity: 0.7;
+        }
+        .time-display {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .event-log {
+            margin-top: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .event-item {
+            padding: 8px;
+            margin: 5px 0;
+            background: #4CAF50;
+            color: white;
+            border-radius: 5px;
+            animation: slideIn 0.3s;
+            font-size: 13px;
+        }
+        .commentary-item {
+            padding: 8px;
+            margin: 5px 0;
+            background: #2196F3;
+            color: white;
+            border-radius: 5px;
+            animation: slideIn 0.3s;
+            font-size: 13px;
+        }
+        .bot-prediction-item {
+            padding: 6px;
+            margin: 3px 0;
+            background: #FF9800;
+            color: white;
+            border-radius: 5px;
+            font-size: 12px;
+            opacity: 0.9;
+        }
+        .player-success-item {
+            padding: 6px;
+            margin: 3px 0;
+            background: #4CAF50;
+            color: white;
+            border-radius: 5px;
+            font-size: 12px;
+            font-weight: bold;
+            opacity: 1;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .player-prediction-item {
+            padding: 6px;
+            margin: 3px 0;
+            background: #9C27B0;
+            color: white;
+            border-radius: 5px;
+            font-size: 12px;
+            opacity: 0.9;
+        }
+            font-size: 12px;
+            opacity: 0.9;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(-100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .prediction-controls {
+            margin-top: 20px;
+        }
+        .prediction-controls h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+        input, select, button {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: scale(1.05);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .score-display {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .leaderboard-list {
+            list-style: none;
+        }
+        .leaderboard-item {
+            padding: 12px;
+            margin: 8px 0;
+            background: #f5f5f5;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .leaderboard-item:nth-child(1) { background: #FFD700; }
+        .leaderboard-item:nth-child(2) { background: #C0C0C0; }
+        .leaderboard-item:nth-child(3) { background: #CD7F32; }
+        .status {
+            text-align: center;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .status.connected { background: #4CAF50; color: white; }
+        .status.disconnected { background: #f44336; color: white; }
+        .login-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .login-box {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            max-width: 400px;
+        }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="login-screen" id="loginScreen">
+        <div class="login-box">
+            <h2>Добро пожаловать!</h2>
+            <p style="margin: 20px 0;">Выберите вид спорта и введите ваше имя</p>
+            
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 10px; font-weight: bold;">Вид спорта:</label>
+                <select id="sportType" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px;">
+                    <option value="football">⚽ Футбол</option>
+                    <option value="boxing">🥊 Бокс</option>
+                    <option value="esports">🎮 Киберспорт (CS:GO)</option>
+                </select>
+            </div>
+            
+            <input type="text" id="playerName" placeholder="Ваше имя" style="margin-bottom: 20px;">
+            <button onclick="startGame()">Начать игру</button>
+        </div>
+    </div>
+
+    <div class="container hidden" id="gameContainer">
+        <div class="header">
+            <h1>🎯 Event Prediction Game</h1>
+            <p id="sportTitle">Предсказывайте события в трансляции и зарабатывайте очки!</p>
+        </div>
+
+        <div class="game-area">
+            <div>
+                <div class="stream-box">
+                    <h2 id="streamTitle">Прямая трансляция</h2>
+                    <div class="stream-video" id="streamVideo">
+                        <div class="field-animation"></div>
+                        <div class="ball-animation" id="ballAnimation"></div>
+                        <div class="boxing-glove hidden" id="boxingGlove">🥊</div>
+                        <div class="crosshair hidden" id="crosshair"></div>
+                        <div class="target hidden" id="target">🎯</div>
+                        <div class="player-animation" id="playerAnimation">🏃</div>
+                        <div class="score-board" id="scoreBoard">0 - 0</div>
+                        <div class="time-display" id="timeDisplay">00:00</div>
+                        <div class="commentary-box" id="commentaryBox" style="display: none;">
+                            <div class="commentary-text" id="commentaryText"></div>
+                        </div>
+                        <div id="loadingMessage" style="text-align: center; z-index: 5; background: rgba(0,0,0,0.8); padding: 20px; border-radius: 10px;">
+                            <div style="font-size: 48px; margin-bottom: 10px;">⚽</div>
+                            <div style="font-size: 18px; color: white;">Подготовка матча...</div>
+                            <div style="font-size: 14px; color: #ccc; margin-top: 10px;">Пожалуйста, подождите</div>
+                        </div>
+                    </div>
+                    <div class="event-log" id="eventLog"></div>
+                </div>
+            </div>
+
+            <div>
+                <div class="prediction-box">
+                    <div class="score-display" id="scoreDisplay">
+                        Очки: <span id="score">0</span>
+                    </div>
+                    <div class="prediction-controls">
+                        <h3>Сделать предсказание</h3>
+                        <div class="control-group">
+                            <label>Тип события:</label>
+                            <select id="eventType">
+                                <option value="гол">Гол</option>
+                                <option value="удар">Удар</option>
+                                <option value="угловой">Угловой</option>
+                                <option value="фол">Фол</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label>Через сколько секунд:</label>
+                            <input type="number" id="predictTime" min="1" max="60" value="10">
+                        </div>
+                        <button onclick="makePrediction()" id="predictBtn">Предсказать событие</button>
+                    </div>
+                </div>
+
+                <div class="leaderboard-box" style="margin-top: 20px;">
+                    <h2>🏆 Таблица лидеров</h2>
+                    <div class="status" id="connectionStatus">Подключение...</div>
+                    <ul class="leaderboard-list" id="leaderboard"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let currentTime = 0;
+        let playerScore = 0;
+        let playerName = '';
+        let selectedSport = 'football';
+        let lastPredictionTime = 0;
+        let canPredict = true;
+        
+        // Конфигурация для разных видов спорта
+        const sportConfig = {
+            football: {
+                title: '⚽ Футбол',
+                events: ['гол', 'удар', 'угловой', 'фол'],
+                eventLabels: {
+                    'гол': 'Гол',
+                    'удар': 'Удар',
+                    'угловой': 'Угловой',
+                    'фол': 'Фол'
+                },
+                icon: '⚽',
+                animation: 'ball'
+            },
+            boxing: {
+                title: '🥊 Бокс',
+                events: ['удар', 'нокдаун', 'клинч', 'предупреждение'],
+                eventLabels: {
+                    'удар': 'Сильный удар',
+                    'нокдаун': 'Нокдаун',
+                    'клинч': 'Клинч',
+                    'предупреждение': 'Предупреждение'
+                },
+                icon: '🥊',
+                animation: 'boxing'
+            },
+            esports: {
+                title: '🎮 CS:GO',
+                events: ['убийство', 'хедшот', 'ace', 'дефьюз'],
+                eventLabels: {
+                    'убийство': 'Убийство',
+                    'хедшот': 'Хедшот',
+                    'ace': 'ACE',
+                    'дефьюз': 'Дефьюз'
+                },
+                icon: '🎮',
+                animation: 'crosshair'
+            }
+        };
+
+        function startGame() {
+            playerName = document.getElementById('playerName').value.trim();
+            selectedSport = document.getElementById('sportType').value;
+            
+            if (!playerName) {
+                alert('Введите имя!');
+                return;
+            }
+            
+            // Обновляем UI под выбранный спорт
+            const config = sportConfig[selectedSport];
+            document.getElementById('sportTitle').textContent = `${config.title} - Предсказывайте события и зарабатывайте очки!`;
+            document.getElementById('streamTitle').textContent = `${config.icon} Прямая трансляция`;
+            
+            // Обновляем иконку анимации
+            updateSportAnimation(selectedSport);
+            
+            // Обновляем список событий в селекторе
+            const eventSelect = document.getElementById('eventType');
+            eventSelect.innerHTML = '';
+            config.events.forEach(event => {
+                const option = document.createElement('option');
+                option.value = event;
+                option.textContent = config.eventLabels[event];
+                eventSelect.appendChild(option);
+            });
+            
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('gameContainer').classList.remove('hidden');
+            
+            connectWebSocket();
+        }
+        
+        function updateSportAnimation(sport) {
+            const ballElement = document.getElementById('ballAnimation');
+            const boxingGlove = document.getElementById('boxingGlove');
+            const crosshair = document.getElementById('crosshair');
+            const target = document.getElementById('target');
+            const playerElement = document.getElementById('playerAnimation');
+            
+            // Скрываем все анимации
+            ballElement.classList.add('hidden');
+            boxingGlove.classList.add('hidden');
+            crosshair.classList.add('hidden');
+            target.classList.add('hidden');
+            
+            // Показываем нужные анимации для выбранного спорта
+            if (sport === 'football') {
+                ballElement.classList.remove('hidden');
+                playerElement.textContent = '🏃';
+            } else if (sport === 'boxing') {
+                boxingGlove.classList.remove('hidden');
+                playerElement.textContent = '🥊';
+            } else if (sport === 'esports') {
+                crosshair.classList.remove('hidden');
+                target.classList.remove('hidden');
+                playerElement.textContent = '🎮';
+            }
+        }
+
+        function connectWebSocket() {
+            const gameId = selectedSport + '_game1';  // Разные игры для разных видов спорта
+            ws = new WebSocket(`ws://${window.location.host}/ws/game/${gameId}`);
+            
+            ws.onopen = () => {
+                updateStatus('connected', 'Подключено');
+                ws.send(JSON.stringify({
+                    player_name: playerName,
+                    sport_type: selectedSport
+                }));
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'game_ready') {
+                    // Скрываем сообщение о загрузке
+                    const loadingMsg = document.getElementById('loadingMessage');
+                    if (loadingMsg) loadingMsg.style.display = 'none';
+                } else if (data.type === 'time_update') {
+                    currentTime = data.time;
+                    updateTimeDisplay(currentTime);
+                } else if (data.type === 'event') {
+                    addEventToLog(data.event);
+                    if (data.commentary) {
+                        addCommentaryToLog(data.commentary);
+                    }
+                    if (data.score) {
+                        updateScoreBoard(data.score);
+                    }
+                    triggerEventAnimation(data.event.type);
+                } else if (data.type === 'commentary') {
+                    addCommentaryToLog(data.text);
+                } else if (data.type === 'score_update') {
+                    playerScore = data.score;
+                    updateScore(data.points_earned);
+                } else if (data.type === 'bot_prediction') {
+                    addBotPredictionToLog(data.bot_name, data.event_type, data.points);
+                } else if (data.type === 'player_success') {
+                    addPlayerSuccessToLog(data.player_name, data.event_type, data.points);
+                }
+            };
+            
+            ws.onclose = () => {
+                updateStatus('disconnected', 'Отключено');
+            };
+            
+            ws.onerror = () => {
+                updateStatus('disconnected', 'Ошибка подключения');
+            };
+        }
+
+        function updateTimeDisplay(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            document.getElementById('timeDisplay').textContent = 
+                `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
+        function addEventToLog(event) {
+            const log = document.getElementById('eventLog');
+            const item = document.createElement('div');
+            item.className = 'event-item';
+            item.textContent = `⚽ ${event.type.toUpperCase()}: ${event.description}`;
+            log.insertBefore(item, log.firstChild);
+        }
+
+        function addCommentaryToLog(text) {
+            const log = document.getElementById('eventLog');
+            const item = document.createElement('div');
+            item.className = 'commentary-item';
+            item.textContent = `🎙️ ${text}`;
+            log.insertBefore(item, log.firstChild);
+        }
+
+        function addBotPredictionToLog(botName, eventType, points) {
+            if (points > 0) {
+                const log = document.getElementById('eventLog');
+                const item = document.createElement('div');
+                item.className = 'bot-prediction-item';
+                item.textContent = `🤖 ${botName} угадал ${eventType} (+${points} очков)`;
+                log.insertBefore(item, log.firstChild);
+            }
+        }
+
+        function addPlayerSuccessToLog(playerName, eventType, points) {
+            if (points > 0) {
+                const log = document.getElementById('eventLog');
+                const item = document.createElement('div');
+                item.className = 'player-success-item';
+                item.textContent = `✅ ${playerName} угадал ${eventType} (+${points} очков)`;
+                log.insertBefore(item, log.firstChild);
+            }
+        }
+
+        function addPlayerPredictionToLog(eventType, predictedTime) {
+            const log = document.getElementById('eventLog');
+            const item = document.createElement('div');
+            item.className = 'player-prediction-item';
+            const timeStr = formatTime(predictedTime);
+            item.textContent = `👤 Вы предсказали ${eventType} в ${timeStr}`;
+            log.insertBefore(item, log.firstChild);
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
+        function updateScore(pointsEarned) {
+            document.getElementById('score').textContent = playerScore;
+            if (pointsEarned > 0) {
+                const scoreDisplay = document.getElementById('scoreDisplay');
+                scoreDisplay.style.animation = 'none';
+                setTimeout(() => {
+                    scoreDisplay.style.animation = 'pulse 0.5s';
+                }, 10);
+            }
+            updateLeaderboard();
+        }
+
+        function showCommentary(text) {
+            const box = document.getElementById('commentaryBox');
+            const textEl = document.getElementById('commentaryText');
+            
+            textEl.textContent = text;
+            box.style.display = 'block';
+            
+            // Скрываем через 5 секунд
+            setTimeout(() => {
+                box.style.display = 'none';
+            }, 5000);
+        }
+
+        function updateScoreBoard(score) {
+            const board = document.getElementById('scoreBoard');
+            board.textContent = `${score[0]} - ${score[1]}`;
+            
+            // Анимация при изменении счёта
+            board.style.transform = 'translateX(-50%) scale(1.2)';
+            setTimeout(() => {
+                board.style.transform = 'translateX(-50%) scale(1)';
+            }, 300);
+        }
+
+        function triggerEventAnimation(eventType) {
+            const video = document.getElementById('streamVideo');
+            
+            // Создаём эффект вспышки
+            const flash = document.createElement('div');
+            flash.style.position = 'absolute';
+            flash.style.top = '0';
+            flash.style.left = '0';
+            flash.style.width = '100%';
+            flash.style.height = '100%';
+            flash.style.pointerEvents = 'none';
+            flash.style.zIndex = '20';
+            
+            if (eventType === 'goal') {
+                flash.style.background = 'rgba(76, 175, 80, 0.5)';
+                flash.style.animation = 'flash 0.5s';
+            } else if (eventType === 'shot') {
+                flash.style.background = 'rgba(255, 193, 7, 0.3)';
+                flash.style.animation = 'flash 0.3s';
+            } else {
+                flash.style.background = 'rgba(255, 255, 255, 0.2)';
+                flash.style.animation = 'flash 0.2s';
+            }
+            
+            video.appendChild(flash);
+            setTimeout(() => flash.remove(), 500);
+        }
+
+        function makePrediction() {
+            const eventType = document.getElementById('eventType').value;
+            const predictTime = parseInt(document.getElementById('predictTime').value);
+            
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert('Нет подключения к серверу');
+                return;
+            }
+            
+            // Проверяем, можно ли делать предсказание
+            if (!canPredict) {
+                const waitTime = lastPredictionTime - currentTime;
+                alert(`Подождите до ${formatTime(lastPredictionTime)} (ещё ${waitTime} сек)`);
+                return;
+            }
+            
+            const predictedTime = currentTime + predictTime;
+            
+            // Блокируем предсказания до времени этого предсказания
+            lastPredictionTime = predictedTime;
+            canPredict = false;
+            
+            ws.send(JSON.stringify({
+                type: 'prediction',
+                event_type: eventType,
+                predicted_time: predictedTime
+            }));
+            
+            // Добавляем предсказание в историю
+            addPlayerPredictionToLog(eventType, predictedTime);
+            
+            // Визуальная обратная связь
+            const btn = document.getElementById('predictBtn');
+            const originalText = btn.textContent;
+            btn.textContent = `✓ Ждите до ${formatTime(predictedTime)}`;
+            btn.disabled = true;
+            
+            // Обновляем кнопку каждую секунду
+            const updateButton = setInterval(() => {
+                if (currentTime >= lastPredictionTime) {
+                    canPredict = true;
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                    clearInterval(updateButton);
+                } else {
+                    const waitTime = lastPredictionTime - currentTime;
+                    btn.textContent = `Ждите ${waitTime} сек`;
+                }
+            }, 1000);
+        }
+
+        function updateStatus(status, text) {
+            const statusEl = document.getElementById('connectionStatus');
+            statusEl.className = `status ${status}`;
+            statusEl.textContent = text;
+        }
+
+        async function updateLeaderboard() {
+            try {
+                const response = await fetch('/api/leaderboard');
+                const data = await response.json();
+                const list = document.getElementById('leaderboard');
+                list.innerHTML = '';
+                
+                data.leaderboard.forEach((player, index) => {
+                    const item = document.createElement('li');
+                    item.className = 'leaderboard-item';
+                    
+                    const isBot = player.name.includes('Bot') || player.name.includes('AI_') || 
+                                  player.name.includes('Neural') || player.name.includes('Quantum') ||
+                                  player.name.includes('Algo') || player.name.includes('ML') ||
+                                  player.name.includes('Cyber') || player.name.includes('Data') ||
+                                  player.name.includes('Deep') || player.name.includes('Smart');
+                    
+                    const botIndicator = isBot ? '<span class="bot-indicator">🤖</span>' : '';
+                    
+                    item.innerHTML = `
+                        <span>${index + 1}. ${player.name}${botIndicator}</span>
+                        <span>${player.score} очков</span>
+                    `;
+                    list.appendChild(item);
+                });
+            } catch (error) {
+                console.error('Error updating leaderboard:', error);
+            }
+        }
+
+        // Обновляем таблицу лидеров каждые 5 секунд
+        setInterval(updateLeaderboard, 5000);
+    </script>
+</body>
+</html>

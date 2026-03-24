@@ -1,0 +1,16 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+.env
+.venv
+venv/
+*.log
+.git
+.gitignore
+README.md
+DEPLOYMENT.md
+ENHANCEMENTS.md
+AI_PROMPTS.md
+SUBMISSION_CHECKLIST.md
