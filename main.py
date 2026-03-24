@@ -431,7 +431,11 @@ Return ONLY the commentary, nothing else."""
 
         commentary = None
         try:
-            result = generate_with_ai(prompt)
+            # Добавляем таймаут для AI генерации
+            result = await asyncio.wait_for(
+                asyncio.to_thread(generate_with_ai, prompt),
+                timeout=5.0  # 5 секунд максимум
+            )
             if result:
                 commentary = result.strip()
                 # Убираем лишнее форматирование
@@ -439,6 +443,8 @@ Return ONLY the commentary, nothing else."""
                 # Ограничиваем длину строго
                 if len(commentary) > 100:
                     commentary = commentary[:100] + "..."
+        except asyncio.TimeoutError:
+            print(f"[Timeout] Commentary generation took too long")
         except Exception as e:
             error_msg = str(e)
             print(f"Commentary error: {error_msg}")
@@ -630,7 +636,12 @@ Return ONLY the JSON array now:"""
 
         events_generated = False
         try:
-            result = generate_with_ai(prompt)
+            # Добавляем таймаут для AI генерации
+            result = await asyncio.wait_for(
+                asyncio.to_thread(generate_with_ai, prompt),
+                timeout=10.0  # 10 секунд максимум
+            )
+            
             if result:
                 # Извлекаем JSON из ответа
                 text = result.strip()
@@ -665,6 +676,8 @@ Return ONLY the JSON array now:"""
                         self.events = sorted(valid_events, key=lambda x: x['time_seconds'])
                         print(f"[AI] Generated {len(self.events)} events")
                         events_generated = True
+        except asyncio.TimeoutError:
+            print("[Timeout] AI event generation took too long, using fallback")
         except json.JSONDecodeError as e:
             print(f"JSON parsing error: {e}")
             if result:
@@ -689,12 +702,53 @@ Return ONLY the JSON array now:"""
                     "type": event_type,
                     "description": desc
                 })
+            print(f"[Fallback] Created {len(self.events)} events")
     
     async def run(self, game_id: str):
         """Запускает симуляцию трансляции"""
-        await self.generate_event_schedule()
+        try:
+            # Генерируем события с таймаутом
+            await asyncio.wait_for(
+                self.generate_event_schedule(),
+                timeout=15.0  # 15 секунд максимум
+            )
+        except asyncio.TimeoutError:
+            print("[Critical Timeout] Event generation exceeded 15s, using fallback")
+            # Принудительно создаём события если их нет
+            if not self.events:
+                event_types = self.sport_config['events']
+                descriptions = self.sport_config['descriptions']
+                self.events = []
+                times = [25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
+                for i, time in enumerate(times):
+                    event_type = event_types[i % len(event_types)]
+                    desc = random.choice(descriptions[event_type])
+                    self.events.append({
+                        "time_seconds": time,
+                        "type": event_type,
+                        "description": desc
+                    })
+                print(f"[Emergency Fallback] Created {len(self.events)} events")
+        except Exception as e:
+            print(f"[Critical Error] Event generation failed: {e}")
+            # Принудительно создаём события
+            if not self.events:
+                event_types = self.sport_config['events']
+                descriptions = self.sport_config['descriptions']
+                self.events = []
+                times = [25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
+                for i, time in enumerate(times):
+                    event_type = event_types[i % len(event_types)]
+                    desc = random.choice(descriptions[event_type])
+                    self.events.append({
+                        "time_seconds": time,
+                        "type": event_type,
+                        "description": desc
+                    })
+                print(f"[Emergency Fallback] Created {len(self.events)} events")
         
-        # Уведомляем, что игра готова
+        # ВСЕГДА уведомляем, что игра готова (даже если AI не сработал)
+        print(f"[Game Start] Broadcasting game_ready with {len(self.events)} events")
         await broadcast_to_game(game_id, {
             "type": "game_ready"
         })
@@ -863,6 +917,20 @@ def update_leaderboard(player_name: str, score: int):
 @app.get("/api/leaderboard")
 async def get_leaderboard():
     return {"leaderboard": leaderboard[:10]}
+
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint для отладки"""
+    ai_status = []
+    for provider_name, _ in AI_PROVIDERS:
+        ai_status.append(provider_name)
+    
+    return {
+        "status": "ok",
+        "ai_providers": ai_status if ai_status else ["fallback_only"],
+        "active_games": len(games),
+        "total_players": sum(len(game["players"]) for game in games.values())
+    }
 
 # Монтируем статические файлы
 app.mount("/static", StaticFiles(directory="static"), name="static")

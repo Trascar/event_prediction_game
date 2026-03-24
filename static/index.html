@@ -585,6 +585,15 @@
             const gameId = selectedSport + '_game1';  // Разные игры для разных видов спорта
             ws = new WebSocket(`ws://${window.location.host}/ws/game/${gameId}`);
             
+            // Таймаут безопасности: если игра не началась через 20 секунд, скрываем загрузку
+            const safetyTimeout = setTimeout(() => {
+                const loadingMsg = document.getElementById('loadingMessage');
+                if (loadingMsg && loadingMsg.style.display !== 'none') {
+                    console.warn('Game loading timeout - hiding loading screen');
+                    loadingMsg.style.display = 'none';
+                }
+            }, 20000);
+            
             ws.onopen = () => {
                 updateStatus('connected', 'Подключено');
                 ws.send(JSON.stringify({
@@ -598,6 +607,7 @@
                 
                 if (data.type === 'game_ready') {
                     // Скрываем сообщение о загрузке
+                    clearTimeout(safetyTimeout);
                     const loadingMsg = document.getElementById('loadingMessage');
                     if (loadingMsg) loadingMsg.style.display = 'none';
                 } else if (data.type === 'time_update') {
